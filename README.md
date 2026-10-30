@@ -33,6 +33,18 @@ Al abrirlos por primera vez:
 - **Windows:** SmartScreen puede advertir que la app no es reconocida. Elige **Más información** → **Ejecutar de todas formas**.
 - **Mac:** haz clic derecho sobre la app y elige **Abrir**.
 
+## Compartir con otras personas (sin terminal)
+
+1. En GitHub, ve a **Releases** → **Draft a new release**.
+2. En **Choose a tag**, escribe `v1.0` y elige **Create new tag**.
+3. Dale un título (por ejemplo, "Compactador PDF 1.0") y pulsa **Publish release**.
+4. GitHub compilará la app y adjuntará `Compactador PDF.exe` (Windows) y `CompactadorPDF-mac.zip` (Mac) a esa versión. Tarda unos minutos.
+5. Comparte el enlace de la página de Releases. Quien lo use solo descarga el archivo de su sistema y lo abre.
+
+Cada persona que vaya a convertir Word debe instalar **LibreOffice** (libreoffice.org). El resto funciona sin instalar nada más.
+
+Para que no aparezcan avisos de seguridad (SmartScreen en Windows o el bloqueo en Mac), hay que firmar la app con certificados de pago. Sin firma, la primera vez hay que seguir los pasos de la sección anterior.
+
 ## Compilar tú mismo
 
 Hay que compilarlo en cada sistema: el `.app` se hace en Mac y el `.exe` en Windows.

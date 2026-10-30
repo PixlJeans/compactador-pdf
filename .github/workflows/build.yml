@@ -12,16 +12,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: windows-latest
-            chip: windows
-          - os: macos-14
-            chip: apple
-          - os: macos-15-intel
-            chip: intel
+        os: [windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
-    env:
-      MACOSX_DEPLOYMENT_TARGET: "12.0"
 
     steps:
       - uses: actions/checkout@v4
@@ -55,9 +47,9 @@ jobs:
             --volname "Compactador PDF" \
             --window-size 540 380 \
             --icon-size 110 \
-            --icon "Compactador PDF.app" 140 170 \
+            --icon "dist/Compactador PDF.app" 140 170 \
             --app-drop-link 400 170 \
-            "dist/CompactadorPDF-Mac-${{ matrix.chip }}.dmg" \
+            "dist/CompactadorPDF-Instalador.dmg" \
             "dist/Compactador PDF.app"
 
       - name: Subir archivos de Windows
@@ -73,8 +65,8 @@ jobs:
         if: runner.os == 'macOS'
         uses: actions/upload-artifact@v4
         with:
-          name: CompactadorPDF-Mac-${{ matrix.chip }}
-          path: dist/CompactadorPDF-Mac-${{ matrix.chip }}.dmg
+          name: CompactadorPDF-Mac
+          path: dist/CompactadorPDF-Instalador.dmg
 
       - name: Publicar Windows en Releases
         if: runner.os == 'Windows' && startsWith(github.ref, 'refs/tags/v')
@@ -88,11 +80,11 @@ jobs:
         if: runner.os == 'macOS' && startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/CompactadorPDF-Mac-${{ matrix.chip }}.dmg
+          files: dist/CompactadorPDF-Instalador.dmg
 
   guardar-instaladores:
     needs: build
-    if: always() && github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     steps:
@@ -104,7 +96,6 @@ jobs:
 
       - name: Copiar instaladores a la carpeta instaladores
         run: |
-          rm -rf instaladores
           mkdir -p instaladores
           find descargas -type f \( -name "*.exe" -o -name "*.dmg" \) -exec cp {} instaladores/ \;
           ls -la instaladores
@@ -113,7 +104,11 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A instaladores
-          git commit -m "Actualizar instaladores [skip ci]" || echo "Sin cambios"
+          git add instaladores
+          if git diff --cached --quiet; then
+            echo "Sin cambios"
+            exit 0
+          fi
+          git commit -m "Actualizar instaladores [skip ci]"
           git pull --rebase origin main
           git push origin HEAD:main

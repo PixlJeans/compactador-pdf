@@ -20,12 +20,11 @@ IMG_EXT = {".jpg", ".jpeg", ".png"}
 PDF_EXT = {".pdf"}
 SUPPORTED = WORD_EXT | IMG_EXT | PDF_EXT
 
-# Clave que llega desde la página -> preset de Ghostscript (None = sin pérdida)
 PRESETS = {
-    "screen": "/screen",   # 72 dpi, máxima compresión
-    "ebook": "/ebook",     # 150 dpi, equilibrado
-    "printer": "/printer", # 300 dpi, alta calidad
-    "none": None,          # sin pérdida
+    "screen": "/screen",
+    "ebook": "/ebook",
+    "printer": "/printer",
+    "none": None,
 }
 
 NO_WINDOW = {"creationflags": 0x08000000} if sys.platform == "win32" else {}
@@ -54,6 +53,14 @@ def find_soffice():
 
 def find_ghostscript():
     if sys.platform == "win32":
+        base = os.environ.get("ProgramFiles", r"C:\Program Files")
+        gs_dir = Path(base) / "gs"
+        if gs_dir.is_dir():
+            for sub in sorted(gs_dir.iterdir(), reverse=True):
+                for exe in ("gswin64c.exe", "gswin32c.exe"):
+                    ruta = sub / "bin" / exe
+                    if ruta.exists():
+                        return str(ruta)
         nombres = ("gswin64c", "gswin32c")
         extra = []
     else:
@@ -115,7 +122,6 @@ def comprimir(origen, destino, gs, preset):
 
 
 def generar_pdf(archivos, destino, preset, progreso):
-    """archivos: lista de dicts con 'path' y 'name', en el orden final."""
     gs = find_ghostscript()
     soffice = None
     trabajo = tempfile.mkdtemp(prefix="compactador_")
@@ -161,8 +167,8 @@ def generar_pdf(archivos, destino, preset, progreso):
 app = Flask(__name__)
 TRABAJO = tempfile.mkdtemp(prefix="compactador_web_")
 atexit.register(shutil.rmtree, TRABAJO, True)
-ARCHIVOS = {}  # id -> {"path", "name", "size"}
-TRABAJOS = {}  # id -> estado del PDF que se está generando
+ARCHIVOS = {}
+TRABAJOS = {}
 
 
 @app.get("/")
@@ -210,7 +216,7 @@ def crear():
     job = uuid.uuid4().hex
     salida = os.path.join(TRABAJO, job + ".pdf")
     TRABAJOS[job] = {"estado": "procesando", "mensaje": "Iniciando...", "progreso": 0.0,
-                     "salida": salida, "mb": 0.0, "aviso": ""}
+                     "salida": salida, "mb": 0.0, "aviso": "", "destino": None}
     threading.Thread(target=_correr, args=(job, lista, salida, PRESETS[clave]), daemon=True).start()
     return jsonify(job=job)
 
@@ -224,7 +230,7 @@ def _correr(job, lista, salida, preset):
 
     try:
         motor = generar_pdf(lista, salida, preset, progreso)
-        t.update(estado="listo", mensaje="Listo", progreso=1.0,
+        t.update(estado="listo", mensaje="PDF generado, guardando...", progreso=1.0,
                  mb=os.path.getsize(salida) / 1048576)
         if preset and motor != "ghostscript":
             t["aviso"] = ("No se encontró Ghostscript, así que solo se aplicó compresión sin pérdida. "
@@ -249,6 +255,62 @@ def descargar(job):
         abort(404)
     return send_file(t["salida"], as_attachment=True,
                      download_name="combinado.pdf", mimetype="application/pdf")
+
+
+def carpeta_descargas():
+    """Carpeta de Descargas del usuario, con respaldo a Documentos."""
+    home = Path.home()
+    for nombre in ("Downloads", "Descargas"):
+        d = home / nombre
+        if d.is_dir():
+            return d
+    d = home / "Documents"
+    d.mkdir(exist_ok=True)
+    return d
+
+
+def nombre_libre(carpeta, base="combinado"):
+    """combinado.pdf, combinado (2).pdf, combinado (3).pdf..."""
+    destino = carpeta / f"{base}.pdf"
+    n = 2
+    while destino.exists():
+        destino = carpeta / f"{base} ({n}).pdf"
+        n += 1
+    return destino
+
+
+@app.post("/api/guardar/<job>")
+def guardar(job):
+    t = TRABAJOS.get(job)
+    if not t or t["estado"] != "listo":
+        return jsonify(error="El PDF aún no está listo."), 400
+
+    if not t.get("destino"):
+        destino = nombre_libre(carpeta_descargas())
+        try:
+            shutil.copy2(t["salida"], destino)
+        except Exception as ex:
+            return jsonify(error=f"No se pudo guardar el archivo: {ex}"), 500
+        t["destino"] = str(destino)
+
+    return jsonify(ruta=t["destino"], carpeta=str(Path(t["destino"]).parent))
+
+
+@app.post("/api/abrir")
+def abrir():
+    carpeta = request.args.get("carpeta", "")
+    if not carpeta or not os.path.isdir(carpeta):
+        return jsonify(error="Carpeta no encontrada."), 400
+    try:
+        if sys.platform == "win32":
+            os.startfile(carpeta)
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", carpeta])
+        else:
+            subprocess.Popen(["xdg-open", carpeta])
+    except Exception as ex:
+        return jsonify(error=str(ex)), 500
+    return jsonify(ok=True)
 
 
 @app.post("/api/salir")
@@ -292,8 +354,9 @@ select{font:inherit;width:100%;padding:10px;border-radius:8px;border:1px solid v
 .barra div{height:100%;width:0;background:var(--ac);transition:width .2s}
 #estado{margin-top:10px;color:var(--mut);min-height:20px}
 .aviso{background:#fef3c7;color:#92400e;border-radius:8px;padding:10px 12px;margin-bottom:12px}
-a.descargar{display:inline-block;margin-top:10px;background:#16a34a;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600}
 .pequeno{font-size:13px;color:var(--mut)}
+.guardado{background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:14px;margin-top:12px;font-size:14px}
+.guardado code{display:block;background:#fff;border:1px solid #d1d5db;border-radius:6px;padding:8px;margin:8px 0;word-break:break-all;font-size:13px}
 </style>
 </head>
 <body>
@@ -336,8 +399,8 @@ const barra = document.getElementById('barra');
 const resultado = document.getElementById('resultado');
 const avisos = document.getElementById('avisos');
 
-let items = [];      // {id, name, size}
-let dragIdx = null;  // índice del elemento que se reordena
+let items = [];
+let dragIdx = null;
 
 function fmt(b){ return b > 1048576 ? (b/1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b/1024)) + ' KB'; }
 
@@ -362,7 +425,7 @@ function render(){
     li.querySelector('.tam').textContent = fmt(it.size);
     lista.appendChild(li);
   });
-  crear.disabled = !items.length;
+  crear.disabled = items.length === 0;
 }
 
 function move(a, b){
@@ -371,7 +434,6 @@ function move(a, b){
   render();
 }
 
-// Botones ▲ ▼ ✕
 lista.addEventListener('click', e => {
   const b = e.target.closest('button');
   if(!b) return;
@@ -381,7 +443,6 @@ lista.addEventListener('click', e => {
   if(b.dataset.a === 'del'){ items.splice(i, 1); render(); }
 });
 
-// Reordenar arrastrando dentro de la lista
 lista.addEventListener('dragstart', e => {
   const li = e.target.closest('li[data-i]');
   if(!li) return;
@@ -410,7 +471,6 @@ lista.addEventListener('drop', e => {
 });
 lista.addEventListener('dragend', () => { dragIdx = null; render(); });
 
-// Subir archivos: arrastrados desde el escritorio (en cualquier parte de la página) o elegidos con clic
 const hayArchivos = e => e.dataTransfer && [...e.dataTransfer.types].includes('Files');
 window.addEventListener('dragover', e => { if(hayArchivos(e)) e.preventDefault(); });
 window.addEventListener('drop', e => {
@@ -469,14 +529,40 @@ function seguir(job){
       const s = await r.json();
       estado.textContent = s.mensaje;
       barra.style.width = (s.progreso * 100) + '%';
+
       if(s.estado === 'listo'){
         clearInterval(t);
         barra.style.width = '100%';
-        const a = document.createElement('a');
-        a.className = 'descargar';
-        a.href = '/api/descargar/' + job;
-        a.textContent = `Descargar PDF (${s.mb.toFixed(1)} MB)`;
-        resultado.appendChild(a);
+        estado.textContent = 'PDF generado. Guardando en Descargas...';
+
+        let g = null;
+        try{
+          const r2 = await fetch('/api/guardar/' + job, {method: 'POST'});
+          g = await r2.json();
+          if(!r2.ok) throw new Error(g.error || 'No se pudo guardar.');
+        }catch(err){
+          estado.textContent = 'Error al guardar: ' + err.message;
+          crear.disabled = false;
+          return;
+        }
+
+        resultado.innerHTML = '';
+        const caja = document.createElement('div');
+        caja.className = 'guardado';
+        const titulo = document.createElement('strong');
+        titulo.textContent = 'Guardado en:';
+        const ruta = document.createElement('code');
+        ruta.textContent = g.ruta;
+        const btn = document.createElement('button');
+        btn.textContent = 'Abrir carpeta';
+        btn.onclick = () => {
+          fetch('/api/abrir?carpeta=' + encodeURIComponent(g.carpeta), {method: 'POST'});
+        };
+        caja.appendChild(titulo);
+        caja.appendChild(ruta);
+        caja.appendChild(btn);
+        resultado.appendChild(caja);
+
         if(s.aviso){
           const p = document.createElement('div');
           p.className = 'aviso';
@@ -484,9 +570,12 @@ function seguir(job){
           p.textContent = s.aviso;
           resultado.appendChild(p);
         }
-        estado.textContent = 'PDF listo.';
+
+        estado.textContent = 'Listo.';
         crear.disabled = false;
+        caja.scrollIntoView({behavior: 'smooth', block: 'center'});
       }
+
       if(s.estado === 'error'){
         clearInterval(t);
         estado.textContent = 'Error: ' + s.mensaje;
@@ -514,7 +603,9 @@ fetch('/api/config').then(r => r.json()).then(c => {
     avisos.appendChild(d);
   }
 }).catch(() => {});
+
 render();
+crear.disabled = true;
 </script>
 </body>
 </html>
@@ -542,7 +633,7 @@ def main():
     time.sleep(0.8)
 
     try:
-        import webview  # ventana propia de la app (sin navegador)
+        import webview
     except ImportError:
         webview = None
 

@@ -1,31 +1,40 @@
-; Instalador de Windows para Compactador PDF (Inno Setup 6)
+#define MiApp "Compactador PDF"
+#define MiVersion "1.0.0"
+#define MiExe "CompactadorPDF.exe"
 
 [Setup]
-AppName=Compactador PDF
-AppVersion=1.1
+AppId={{8F3C2A71-4B6D-4E92-9A15-7C2D5E8B1F04}
+AppName={#MiApp}
+AppVersion={#MiVersion}
 AppPublisher=PixlJeans
-DefaultDirName={autopf}\Compactador PDF
-DefaultGroupName=Compactador PDF
-OutputDir=dist
-OutputBaseFilename=CompactadorPDF-Setup
-Compression=lzma
+DefaultDirName={autopf}\{#MiApp}
+DefaultGroupName={#MiApp}
+DisableProgramGroupPage=yes
+OutputDir=instaladores
+OutputBaseFilename=CompactadorPDF-{#MiVersion}-win64
+Compression=lzma2/max
 SolidCompression=yes
-PrivilegesRequired=lowest
 WizardStyle=modern
-UninstallDisplayIcon={app}\Compactador PDF.exe
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
+PrivilegesRequired=lowest
+PrivilegesRequiredOverridesAllowed=dialog
+UninstallDisplayIcon={app}\{#MiExe}
+WizardImageStretch=no
 
 [Languages]
 Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 
 [Tasks]
-Name: "desktopicon"; Description: "Crear acceso directo en el escritorio"; GroupDescription: "Accesos directos:"
+Name: "desktopicon"; Description: "Crear un acceso directo en el escritorio"; GroupDescription: "Accesos directos:"
 
 [Files]
-Source: "dist\Compactador PDF.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "dist\CompactadorPDF\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\Compactador PDF"; Filename: "{app}\Compactador PDF.exe"
-Name: "{autodesktop}\Compactador PDF"; Filename: "{app}\Compactador PDF.exe"; Tasks: desktopicon
+Name: "{group}\{#MiApp}"; Filename: "{app}\{#MiExe}"
+Name: "{group}\Desinstalar {#MiApp}"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\{#MiApp}"; Filename: "{app}\{#MiExe}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\Compactador PDF.exe"; Description: "Abrir Compactador PDF"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MiExe}"; Description: "Abrir {#MiApp}"; Flags: nowait postinstall skipifsilent

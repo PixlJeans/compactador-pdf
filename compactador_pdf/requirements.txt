@@ -1,4 +1,0 @@
-flask>=3.0
-pypdf>=4.2
-pillow>=10.0
-pyinstaller>=6.0

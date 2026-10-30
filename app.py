@@ -528,11 +528,32 @@ def puerto_libre():
 
 
 def main():
+    import time
+
     port = puerto_libre()
     url = f"http://127.0.0.1:{port}"
-    threading.Timer(1.0, lambda: webbrowser.open(url)).start()
-    print(f"Compactador PDF abierto en {url}")
-    app.run(host="127.0.0.1", port=port, debug=False, use_reloader=False, threaded=True)
+    servidor = threading.Thread(
+        target=app.run,
+        kwargs={"host": "127.0.0.1", "port": port, "debug": False,
+                "use_reloader": False, "threaded": True},
+        daemon=True,
+    )
+    servidor.start()
+    time.sleep(0.8)
+
+    try:
+        import webview  # ventana propia de la app (sin navegador)
+    except ImportError:
+        webview = None
+
+    if webview is None:
+        webbrowser.open(url)
+        servidor.join()
+        return
+
+    webview.create_window("Compactador PDF", url, width=900, height=820, min_size=(640, 600))
+    webview.start()
+    os._exit(0)
 
 
 if __name__ == "__main__":
